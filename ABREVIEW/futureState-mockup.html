@@ -1,0 +1,155 @@
+<div id="dsr-workshop-concept" aria-label="Dark Souls character workshop screen concept">
+  <style>
+    #dsr-workshop-concept { --s-bg:light-dark(#eee9df,#141613); --s-panel:light-dark(#fbf8f0,#1d201b); --s-text:light-dark(#242820,#eee9dc); --s-muted:light-dark(#626757,#b2b5a6); --s-line:light-dark(#cecaba,#383d32); --s-ember:light-dark(#8d4c16,#e8b46a); --s-focus:light-dark(#e5d4b6,#3b3426); --s-good:light-dark(#3e6345,#a4c39d); color:var(--s-text); font:400 16px/1.5 system-ui,sans-serif; }
+    #dsr-workshop-concept * { box-sizing:border-box; }
+    #dsr-workshop-concept .sw-screen { background:var(--s-bg); padding:26px; border-radius:12px; min-height:610px; }
+    #dsr-workshop-concept .sw-top,#dsr-workshop-concept .sw-status,#dsr-workshop-concept .sw-actions { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+    #dsr-workshop-concept .sw-brand { color:var(--s-ember); letter-spacing:.12em; font-size:12px; font-weight:600; }
+    #dsr-workshop-concept h2 { font-size:26px; font-weight:500; margin:3px 0; line-height:1.25; }
+    #dsr-workshop-concept h3 { font-size:21px; font-weight:500; margin:0 0 12px; }
+    #dsr-workshop-concept p { margin:0 0 12px; }
+    #dsr-workshop-concept .sw-sub { color:var(--s-muted); font-size:13px; }
+    #dsr-workshop-concept button,#dsr-workshop-concept input,#dsr-workshop-concept select { font:inherit; color:var(--s-text); }
+    #dsr-workshop-concept button { background:var(--s-panel); border:1px solid var(--s-line); border-radius:6px; padding:9px 13px; cursor:default; min-height:44px; }
+    #dsr-workshop-concept button:focus-visible,#dsr-workshop-concept input:focus-visible,#dsr-workshop-concept select:focus-visible { outline:3px solid var(--s-ember); outline-offset:3px; }
+    #dsr-workshop-concept button:hover { background:var(--s-focus); }
+    #dsr-workshop-concept button[aria-pressed="true"] { background:var(--s-focus); border-color:var(--s-ember); }
+    #dsr-workshop-concept .sw-primary { background:var(--s-ember); color:var(--s-bg); border-color:var(--s-ember); font-weight:600; }
+    #dsr-workshop-concept .sw-primary:hover { background:var(--s-ember); opacity:.9; }
+    #dsr-workshop-concept button:disabled { opacity:.45; }
+    #dsr-workshop-concept .sw-tabs { display:flex; gap:6px; flex-wrap:wrap; margin:22px 0; padding-bottom:16px; border-bottom:1px solid var(--s-line); }
+    #dsr-workshop-concept .sw-tabs button { background:transparent; border-color:transparent; }
+    #dsr-workshop-concept .sw-tabs button[aria-pressed="true"] { background:var(--s-focus); border-color:var(--s-ember); }
+    #dsr-workshop-concept .sw-grid { display:grid; grid-template-columns:1.2fr 1fr; gap:24px; min-height:330px; }
+    #dsr-workshop-concept .sw-panel { background:var(--s-panel); padding:20px; border-radius:8px; }
+    #dsr-workshop-concept .sw-stat-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px 24px; }
+    #dsr-workshop-concept .sw-stat { display:flex; justify-content:space-between; gap:8px; padding:7px 0; border-bottom:1px solid var(--s-line); font-variant-numeric:tabular-nums; }
+    #dsr-workshop-concept .sw-stat b { font-weight:500; }
+    #dsr-workshop-concept .sw-bar { background:var(--s-line); height:7px; border-radius:6px; margin:5px 0 16px; overflow:hidden; }
+    #dsr-workshop-concept .sw-bar span { display:block; height:100%; background:var(--s-good); }
+    #dsr-workshop-concept .sw-good { color:var(--s-good); }
+    #dsr-workshop-concept .sw-ember { color:var(--s-ember); }
+    #dsr-workshop-concept .sw-controls { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px; align-items:end; }
+    #dsr-workshop-concept label { display:flex; flex-direction:column; gap:4px; flex:1; min-width:130px; font-size:13px; color:var(--s-muted); }
+    #dsr-workshop-concept input,#dsr-workshop-concept select { width:100%; background:var(--s-panel); border:1px solid var(--s-line); border-radius:6px; padding:10px; min-height:44px; }
+    #dsr-workshop-concept .sw-list { display:flex; flex-direction:column; gap:6px; }
+    #dsr-workshop-concept .sw-list button { width:100%; text-align:left; display:flex; justify-content:space-between; gap:12px; align-items:center; }
+    #dsr-workshop-concept .sw-list small { font-size:12px; color:var(--s-muted); display:block; }
+    #dsr-workshop-concept .sw-big { font-size:38px; font-weight:500; font-variant-numeric:tabular-nums; margin:10px 0; }
+    #dsr-workshop-concept .sw-rule { border:0; border-top:1px solid var(--s-line); margin:18px 0; }
+    #dsr-workshop-concept .sw-history { margin:12px 0 0; padding-left:20px; color:var(--s-muted); }
+    #dsr-workshop-concept .sw-history li { margin:8px 0; }
+    #dsr-workshop-concept .sw-footer { display:flex; flex-wrap:wrap; gap:10px 22px; border-top:1px solid var(--s-line); margin-top:22px; padding-top:14px; color:var(--s-muted); font-size:13px; }
+    #dsr-workshop-concept kbd { color:var(--s-text); font:500 12px system-ui,sans-serif; display:inline-block; border:1px solid var(--s-line); border-radius:4px; padding:1px 5px; margin-right:5px; }
+    #dsr-workshop-concept .sw-message { min-height:26px; margin-top:12px; font-size:13px; color:var(--s-ember); }
+    #dsr-workshop-concept .sw-change { display:flex; justify-content:space-between; gap:12px; padding:12px 0; border-bottom:1px solid var(--s-line); }
+    #dsr-workshop-concept .sw-step { display:flex; gap:10px; align-items:center; margin:12px 0; }
+    #dsr-workshop-concept .sw-step span:first-child { color:var(--s-good); }
+    #dsr-workshop-concept .sw-build-row { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 0; }
+    #dsr-workshop-concept .sw-build-row div { display:flex; gap:8px; align-items:center; font-variant-numeric:tabular-nums; }
+    #dsr-workshop-concept .sw-build-row button { min-width:44px; }
+    @media(max-width:640px) { #dsr-workshop-concept .sw-screen { padding:16px; } #dsr-workshop-concept .sw-grid { grid-template-columns:1fr; gap:14px; } #dsr-workshop-concept h2 { font-size:22px; } #dsr-workshop-concept .sw-panel { padding:16px; } #dsr-workshop-concept .sw-tabs { gap:3px; } #dsr-workshop-concept .sw-tabs button { padding:8px; font-size:14px; } }
+  </style>
+  <div class="sw-screen">
+    <header class="sw-top">
+      <div><div class="sw-brand">DSR · CHARACTER WORKSHOP</div><h2>Ashen Wanderer</h2><div class="sw-sub">Account: Player · Game slot 2 · Level 70</div></div>
+      <div><div class="sw-sub">INTERACTIVE CONCEPT · SAMPLE DATA</div><button id="sw-pending" type="button">Review · 0 changes</button></div>
+    </header>
+    <nav class="sw-tabs" aria-label="Workshop views">
+      <button type="button" data-view="character" aria-pressed="true">Character</button>
+      <button type="button" data-view="inventory" aria-pressed="false">Inventory</button>
+      <button type="button" data-view="build" aria-pressed="false">Build</button>
+      <button type="button" data-view="snapshots" aria-pressed="false">Snapshots</button>
+      <button type="button" data-view="review" aria-pressed="false">Review</button>
+    </nav>
+    <main id="sw-content"></main>
+    <div id="sw-message" class="sw-message" role="status" aria-live="polite">Explore the tabs. Every operation here is a simulation.</div>
+    <footer class="sw-footer"><span><kbd>L / R</kbd>Switch view</span><span><kbd>A</kbd>Select / stage</span><span><kbd>B</kbd>Back</span><span><kbd>+</kbd>Review changes</span></footer>
+  </div>
+  <script>
+  (() => {
+    const root=document.getElementById('dsr-workshop-concept');
+    const content=root.querySelector('#sw-content'), message=root.querySelector('#sw-message');
+    const catalog=[
+      {id:'shard',name:'Titanite Shard',category:'Materials',owned:12,max:99,note:'Refill an existing stack. Other entry fields stay unchanged.'},
+      {id:'large',name:'Large Titanite Shard',category:'Materials',owned:6,max:99,note:'Refill an existing stack to its individual limit.'},
+      {id:'chunk',name:'Titanite Chunk',category:'Materials',owned:2,max:99,note:'Stage the quantity change, then inspect it in Review.'},
+      {id:'claymore',name:'Claymore',category:'Weapons',owned:0,max:1,note:'Add the base +0 version. New equipment support requires hardware validation.'},
+      {id:'elite',name:'Elite Knight Armor',category:'Armor',owned:0,max:1,note:'Add one armor piece. A future set action would preflight all missing pieces.'},
+      {id:'humanity',name:'Humanity',category:'Goods',owned:3,max:99,note:'Refill the inventory stack. This does not change active humanity.'}
+    ];
+    let state={view:'character',query:'',filter:'All',selected:'shard',strength:24,pending:[],snapshot:'before'};
+    const snapshots=[{id:'before',label:'Before respec',date:'Nov 16 · 9:10 AM',note:'Full save · 2 characters · Level 70'}, {id:'weapons',label:'Before adding weapons',date:'Nov 15 · 8:42 PM',note:'Full save · 2 characters · Level 68'}];
+    function restore(saved) {
+      const s=saved && saved.privateContent;
+      if(!s || s.version!==1)return;
+      state.view=['character','inventory','build','snapshots','review'].includes(s.view)?s.view:'character';
+      state.query=typeof s.query==='string'?s.query.slice(0,80):'';
+      state.filter=['All','Materials','Weapons','Armor','Goods'].includes(s.filter)?s.filter:'All';
+      state.selected=catalog.some(x=>x.id===s.selected)?s.selected:'shard';
+      state.strength=Number.isInteger(s.strength)?Math.max(1,Math.min(99,s.strength)):24;
+      state.pending=Array.isArray(s.pending)?s.pending.filter(x=>x && (x.kind==='build'||(x.kind==='item'&&catalog.some(i=>i.id===x.id))||(x.kind==='restore'&&snapshots.some(i=>i.id===x.id)))).slice(0,8):[];
+      state.snapshot=s.snapshot==='weapons'?'weapons':'before';
+    }
+    restore(window.openai?.widgetState);
+    const escape=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const note=t=>{message.textContent=t;};
+    function persist(){ if(window.openai?.setWidgetState)window.openai.setWidgetState({modelContent:{view:state.view,pendingCount:state.pending.length},privateContent:{version:1,...state}}).catch(()=>{}); }
+    const actions=()=>`<div class="sw-actions"><button type="button" class="sw-primary" data-go="review">Review changes</button><button type="button" data-go="snapshots">Browse snapshots</button></div>`;
+    function render(){
+      root.querySelectorAll('[data-view]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.view===state.view)));
+      root.querySelector('#sw-pending').textContent=`Review · ${state.pending.length} change${state.pending.length===1?'':'s'}`;
+      if(state.view==='character')content.innerHTML=`<div class="sw-grid"><section class="sw-panel"><div class="sw-status"><h3>Character overview</h3><span class="sw-sub sw-good">✓ Supported sample</span></div><div class="sw-status"><span>HP</span><span>1,100 / 1,100</span></div><div class="sw-bar"><span style="width:100%"></span></div><div class="sw-status"><span>Stamina</span><span>120 / 120</span></div><div class="sw-bar"><span style="width:100%"></span></div><div class="sw-stat-grid">${[['Vitality',30],['Attunement',12],['Endurance',25],['Strength',24],['Dexterity',18],['Resistance',11],['Intelligence',20],['Faith',12]].map(([n,v])=>`<div class="sw-stat"><span>${n}</span><b>${v}</b></div>`).join('')}</div></section><section class="sw-panel"><h3>Ready to experiment</h3><p>Inspect your inventory, draft a build, then review exactly what will change.</p><hr class="sw-rule"><p class="sw-sub">Latest sample snapshot</p><p>Before respec<br><span class="sw-sub">Nov 16 · 9:10 AM · Full save</span></p><p class="sw-good">✓ Snapshot integrity verified</p>${actions()}<p class="sw-sub" style="margin-top:18px">Support and verification labels shown here are illustrative.</p></section></div>`;
+      if(state.view==='inventory')renderInventory();
+      if(state.view==='build')content.innerHTML=`<div class="sw-grid"><section class="sw-panel"><h3>Build draft</h3><p class="sw-sub">Current → target · No save changes yet</p><div class="sw-build-row"><span>Strength</span><div><span>24 → <b>${state.strength}</b></span><button type="button" data-strength="-1" aria-label="Decrease target Strength">−</button><button type="button" data-strength="1" aria-label="Increase target Strength">+</button></div></div>${[['Vitality',30],['Endurance',25],['Dexterity',18]].map(([n,v])=>`<div class="sw-stat"><span>${n}</span><span>${v} → ${v}</span></div>`).join('')}<hr class="sw-rule"><p>Target level <span class="sw-ember">${70+state.strength-24}</span></p><p class="sw-sub">Example preserves the sample's loaded stat/level relationship. Game formulas need separate validation.</p><button class="sw-primary" type="button" id="sw-stage-build">Stage build changes</button></section><section class="sw-panel"><h3>A workspace for ideas</h3><p>Try an attribute target before applying it to your editing session.</p><ul class="sw-history"><li>Preview current and target values together.</li><li>Keep inventory additions separate.</li><li>Save named presets in a later implementation.</li><li>Show equipment requirements only when verified.</li></ul><hr class="sw-rule"><button type="button" id="sw-build-preset">Try Strength 40</button></section></div>`;
+      if(state.view==='snapshots')content.innerHTML=`<div class="sw-grid"><section><h3>Recovery snapshots</h3><div class="sw-list">${snapshots.map(s=>`<button type="button" data-snapshot="${s.id}" aria-pressed="${state.snapshot===s.id}"><span>${s.label}<small>${s.date} · Sample</small></span><span class="sw-good">✓ Verified</span></button>`).join('')}</div><p class="sw-sub" style="margin-top:15px">Immutable copies organized by account.<br>Labels and dates here are fictional.</p></section><section class="sw-panel"><h3>${snapshots.find(s=>s.id===state.snapshot).label}</h3><p>${snapshots.find(s=>s.id===state.snapshot).note}</p><p class="sw-good">✓ Full-file integrity check passed</p><hr class="sw-rule"><p>A full restore replaces every character in this container. Review the scope before continuing.</p><p class="sw-sub">The proposed app creates a pre-restore recovery copy first.</p><button type="button" class="sw-primary" id="sw-restore">Preview full restore</button></section></div>`;
+      if(state.view==='review'){
+        const restoring=state.pending.some(p=>p.kind==='restore');
+        content.innerHTML=`<div class="sw-grid"><section class="sw-panel"><h3>${restoring?'Restore preview':'Pending changes'}</h3>${state.pending.length?state.pending.map(p=>`<div class="sw-change"><span>${escape(p.label)}</span><span class="sw-ember">${escape(p.value)}</span></div>`).join(''):'<p>No changes staged.</p><p class="sw-sub">Try adding an inventory item or adjusting the build draft.</p>'}<div class="sw-actions" style="margin-top:20px"><button type="button" id="sw-undo" ${state.pending.length?'':'disabled'}>Undo last</button><button type="button" data-go="inventory">Back to inventory</button></div></section><section class="sw-panel"><h3>${restoring?'Restore with recovery':'Save with recovery'}</h3><div class="sw-step"><span>1</span><span>Validate and compare the live baseline</span></div><div class="sw-step"><span>2</span><span>Create and verify a recovery snapshot</span></div><div class="sw-step"><span>3</span><span>Write, commit, and verify the result</span></div><hr class="sw-rule"><p class="sw-sub">Concept only. This button simulates success; it performs no file operations.</p><button type="button" class="sw-primary" id="sw-save" ${state.pending.length?'':'disabled'}>Simulate ${restoring?'restore':'save'}</button></section></div>`;
+      }
+    }
+    function renderInventory(){
+      const visible=catalog.filter(x=>(state.filter==='All'||x.category===state.filter)&&x.name.toLowerCase().includes(state.query.toLowerCase()));
+      if(visible.length&&!visible.some(x=>x.id===state.selected))state.selected=visible[0].id;
+      const selected=visible.find(x=>x.id===state.selected);
+      content.innerHTML=`<div class="sw-controls"><label>Search inventory<input id="sw-search" type="search" placeholder="Item name…" value="${escape(state.query)}"></label><label>Category<select id="sw-filter">${['All','Materials','Weapons','Armor','Goods'].map(x=>`<option ${x===state.filter?'selected':''}>${x}</option>`).join('')}</select></label></div><div class="sw-grid"><section><div class="sw-list">${visible.length?visible.map(x=>`<button type="button" data-item="${x.id}" aria-pressed="${x.id===state.selected}"><span>${x.name}<small>${x.category}${state.pending.some(p=>p.id===x.id)?' · Change staged':''}</small></span><span>${x.owned?'×'+x.owned:'Missing'}</span></button>`).join(''):'<p>No matching items.</p>'}</div></section><section class="sw-panel">${selected?`<div class="sw-sub">${selected.category.toUpperCase()} · SAMPLE ENTRY</div><h3>${selected.name}</h3><div class="sw-big">${selected.owned} <span class="sw-sub">→ ${selected.max}</span></div><p>${selected.note}</p><p class="sw-sub">${selected.category==='Weapons'||selected.category==='Armor'?'Experimental equipment insertion':'Recognized quantity edit'} · Individual limit: ${selected.max}</p><hr class="sw-rule"><button class="sw-primary" type="button" id="sw-stage-item">${selected.owned?'Stage refill':'Stage addition'}</button>`:'<h3>Nothing selected</h3><p>Change the category or search text.</p>'}</section></div>`;
+    }
+    function stage(command){
+      if(state.pending.some(p=>p.kind==='restore')){note('Undo the restore preview before staging character edits.');return;}
+      const idx=state.pending.findIndex(p=>p.kind===command.kind&&p.id===command.id);
+      if(idx>=0)state.pending[idx]=command;else state.pending.push(command);
+      render();persist();note('Staged in the sample session. Open Review to inspect the change.');
+    }
+    root.addEventListener('click',e=>{
+      const b=e.target.closest('button');if(!b||b.disabled)return;
+      const view=b.dataset.view||b.dataset.go||(b.id==='sw-pending'?'review':null);
+      if(view){state.view=view;render();persist();note('Concept preview · No real save is connected.');return;}
+      if(b.dataset.item){state.selected=b.dataset.item;render();persist();return;}
+      if(b.dataset.snapshot){state.snapshot=b.dataset.snapshot;render();persist();return;}
+      if(b.dataset.strength){state.strength=Math.max(1,Math.min(99,state.strength+Number(b.dataset.strength)));render();persist();return;}
+      if(b.id==='sw-build-preset'){state.strength=40;render();persist();return;}
+      if(b.id==='sw-stage-item'){const x=catalog.find(x=>x.id===state.selected);stage({kind:'item',id:x.id,label:x.name,value:x.owned?`${x.owned} → ${x.max}`:`Add ×${x.max}`});}
+      if(b.id==='sw-stage-build'){
+        if(state.strength===24){note('The target matches the sample character. Nothing to stage.');return;}
+        stage({kind:'build',id:'strength',label:'Strength / derived level',value:`24 → ${state.strength} / 70 → ${70+state.strength-24}`});
+      }
+      if(b.id==='sw-undo'){state.pending.pop();render();persist();note('Removed the last staged sample operation.');}
+      if(b.id==='sw-restore'){
+        if(state.pending.length){note('Undo pending operations in Review before previewing a full restore.');return;}
+        state.pending=[{kind:'restore',id:state.snapshot,label:'Full container restore',value:snapshots.find(s=>s.id===state.snapshot).label}];state.view='review';render();persist();note('Restore preview only: both sample characters would be replaced.');
+      }
+      if(b.id==='sw-save'){
+        state.pending=[];state.strength=24;state.view='character';render();persist();note('Simulation complete: backup → write → commit → verify. Sample values reset; no files changed.');
+      }
+    });
+    root.addEventListener('input',e=>{
+      if(e.target.id==='sw-search'){
+        const pos=e.target.selectionStart;state.query=e.target.value;renderInventory();const input=root.querySelector('#sw-search');input.focus();try{input.setSelectionRange(pos,pos);}catch(_){}persist();
+      }
+    });
+    root.addEventListener('change',e=>{if(e.target.id==='sw-filter'){state.filter=e.target.value;render();persist();}});
+    window.addEventListener('openai:set_globals',e=>{if(e.detail?.globals?.widgetState){restore(e.detail.globals.widgetState);render();}});
+    render();
+  })();
+  </script>
+</div>
