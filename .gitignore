@@ -1,0 +1,13 @@
+build/
+*.elf
+*.nacp
+*.nro
+*.o
+*.d
+*.map
+*.lst
+__pycache__/
+*.pyc
+tests/test_core
+*.sl2
+*.bak
