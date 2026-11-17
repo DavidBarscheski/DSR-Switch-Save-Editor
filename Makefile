@@ -22,7 +22,7 @@ INCLUDES	:=	include
 
 APP_TITLE	:=	DSR Save Editor
 APP_AUTHOR	:=	homebrew
-APP_VERSION	:=	0.1.0
+APP_VERSION	:=	0.2.0
 APP_ICON	:=	$(TOPDIR)/icon.jpg
 
 ARCH	:=	-march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fPIE
