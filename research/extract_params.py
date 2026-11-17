@@ -23,7 +23,8 @@ for cat, f in (("goods", "EquipParamGoods"), ("weapon", "EquipParamWeapon"), ("a
     for i, v in sorted(rows.items()):
         out.append(dict(category=cat, id=i, name=nm.get(i, ""), sortId=v["sortId"],
                         maxNum=v.get("maxNum", ""), durabilityMax=v.get("durabilityMax", ""),
-                        goodsType=v.get("goodsType", ""), weaponCategory=v.get("weaponCategory", "")))
+                        goodsType=v.get("goodsType", ""), weaponCategory=v.get("weaponCategory", ""),
+                        iconId=v.get("iconId", v.get("iconIdM", ""))))
 with open(os.path.join(here, "param_items.csv"), "w", newline="") as fh:
     w = csv.DictWriter(fh, list(out[0].keys())); w.writeheader(); w.writerows(out)
 print(len(out), "rows")

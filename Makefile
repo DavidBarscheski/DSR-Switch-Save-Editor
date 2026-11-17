@@ -21,8 +21,8 @@ DATA		:=	data
 INCLUDES	:=	include
 
 APP_TITLE	:=	DSR Save Editor
-APP_AUTHOR	:=	homebrew
-APP_VERSION	:=	0.2.0
+APP_AUTHOR	:=	D-Barsh & Claude
+APP_VERSION	:=	1.0.0
 APP_ICON	:=	$(TOPDIR)/icon.jpg
 
 ARCH	:=	-march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fPIE
@@ -35,7 +35,19 @@ CXXFLAGS	:=	$(CFLAGS) -fno-rtti -fno-exceptions -std=gnu++17
 ASFLAGS	:=	-g $(ARCH)
 LDFLAGS	=	-specs=$(DEVKITPRO)/libnx/switch.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
 
-LIBS	:=	-lnx
+# SDL2 (+ttf, +image) for the graphical UI: install with
+#   sudo dkp-pacman -S switch-sdl2 switch-sdl2_ttf switch-sdl2_image switch-pkg-config
+PKGCONF	:=	$(DEVKITPRO)/portlibs/switch/bin/aarch64-none-elf-pkg-config
+SDL_CFLAGS	:=	$(shell $(PKGCONF) --cflags sdl2 SDL2_ttf SDL2_image 2>/dev/null)
+SDL_LIBS	:=	$(shell $(PKGCONF) --libs --static sdl2 SDL2_ttf SDL2_image 2>/dev/null)
+ifeq ($(strip $(SDL_LIBS)),)
+SDL_CFLAGS	:=	-I$(DEVKITPRO)/portlibs/switch/include/SDL2
+SDL_LIBS	:=	-lSDL2_ttf -lSDL2_image -lwebp -lpng -ljpeg -lfreetype -lbz2 -lz -lSDL2 -lEGL -lGLESv2 -lglapi -ldrm_nouveau
+endif
+CFLAGS	+=	$(SDL_CFLAGS)
+CXXFLAGS	+=	$(SDL_CFLAGS)
+
+LIBS	:=	$(SDL_LIBS) -lnx
 
 LIBDIRS	:=	$(PORTLIBS) $(LIBNX)
 

@@ -129,6 +129,7 @@ public:
     // is not recognised). Quantities are clamped to 1..kMaxStack.
     size_t itemCount() const { return items_.size(); }
     const char* itemName(size_t i) const;
+    uint32_t itemId(size_t i) const;
     uint32_t itemQty(size_t i) const;
     uint32_t itemOriginalQty(size_t i) const;
     bool itemChanged(size_t i) const { return itemQty(i) != itemOriginalQty(i); }
@@ -149,6 +150,10 @@ public:
     size_t findOwned(size_t addable) const;
     // True if the inventory already has this addable item (any type: goods, ring or armor).
     bool owns(size_t addable) const;
+    // True if the inventory has this addable item now but the file as loaded did not (added this session).
+    bool addedThisSession(size_t addable) const;
+    // Number of inventory entries that exist now but did not in the file as loaded.
+    size_t addedEntryCount() const;
     // Undoes an add made in this session (any type). Returns false if that item was not added now.
     bool revertAdded(size_t addable);
 

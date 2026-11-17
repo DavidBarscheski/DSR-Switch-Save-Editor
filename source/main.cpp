@@ -1,6 +1,7 @@
-// Dark Souls Remastered save editor for Nintendo Switch homebrew (libnx).
+// Dark Souls Remastered save editor for Nintendo Switch homebrew (libnx + SDL2).
 //
 // Flow: warning -> pick user -> mount the game's save -> verify -> edit -> back up -> write -> commit.
+// All screens are drawn by ui.cpp through SdlGfx; this file holds the console-specific parts.
 #include <switch.h>
 
 #include <dirent.h>
@@ -14,8 +15,12 @@
 #include <string>
 #include <vector>
 
+#include "catalog.h"
+#include "gfx_sdl.h"
+#include "input.h"
 #include "persist.h"
 #include "save.h"
+#include "ui.h"
 
 namespace {
 
@@ -23,8 +28,10 @@ constexpr u64 kDsrTitleId = 0x01004AB00A260000ULL;
 constexpr const char* kMount = "save";
 constexpr const char* kAppDir = "sdmc:/switch/DSRSaveEditor";
 constexpr const char* kBackupDir = "sdmc:/switch/DSRSaveEditor/backups";
+constexpr const char* kIconDir = "sdmc:/switch/DSRSaveEditor/icons";
 
 PadState g_pad;
+dsr::SdlGfx g_gfx;
 
 // ---------------------------------------------------------------- input / screen
 
@@ -33,24 +40,39 @@ u64 pollDown() {
     return padGetButtonsDown(&g_pad);
 }
 
-// Blocks until one of `mask` is pressed. Returns false if the app is asked to close.
-bool waitFor(u64 mask, u64* pressed = nullptr) {
+// Draws `draw()` every frame until one of `mask` is pressed. Returns false if the app is asked to close.
+template <class Draw>
+bool waitFor(u64 mask, Draw draw, u64* pressed = nullptr) {
     while (appletMainLoop()) {
         u64 d = pollDown();
         if (d & mask) {
             if (pressed) *pressed = d & mask;
             return true;
         }
-        consoleUpdate(nullptr);
+        draw();
+        g_gfx.present();
     }
     return false;
 }
 
-void fatalScreen(const char* title, const char* detail) {
-    consoleClear();
-    std::printf("\x1b[31m%s\x1b[0m\n\n%s\n\nPress + to exit.\n", title, detail);
-    consoleUpdate(nullptr);
-    waitFor(HidNpadButton_Plus);
+void fatalScreen(const std::string& title, const std::string& detail) {
+    waitFor(HidNpadButton_Plus, [&] { dsr::drawNotice(g_gfx, title, detail, "Exit", true); });
+}
+
+// Opens the system keyboard. Returns false if it could not open or the user cancelled.
+bool askText(const char* header, const std::string& initial, std::string& out) {
+    SwkbdConfig kbd;
+    if (R_FAILED(swkbdCreate(&kbd, 0))) return false;
+    swkbdConfigMakePresetDefault(&kbd);
+    swkbdConfigSetHeaderText(&kbd, header);
+    swkbdConfigSetInitialText(&kbd, initial.c_str());
+    swkbdConfigSetStringLenMax(&kbd, 32);
+    char buf[128] = {};
+    Result rc = swkbdShow(&kbd, buf, sizeof(buf));
+    swkbdClose(&kbd);
+    if (R_FAILED(rc)) return false;
+    out = buf;
+    return true;
 }
 
 // ---------------------------------------------------------------- files
@@ -196,6 +218,7 @@ std::string userName(AccountUid uid) {
     return name;
 }
 
+
 // Returns false if the user quit.
 bool pickUser(AccountUid& chosen, std::string& name) {
     AccountUid uids[ACC_USER_LIST_SIZE];
@@ -217,143 +240,39 @@ bool pickUser(AccountUid& chosen, std::string& name) {
         return true;
     }
 
+    std::vector<dsr::ChoiceRow> rows;
+    for (const std::string& n : names) rows.push_back({n, ""});
     int sel = 0;
-    bool redraw = true;
     while (appletMainLoop()) {
-        if (redraw) {
-            consoleClear();
-            std::printf("Select the user whose Dark Souls save to edit:\n\n");
-            for (int i = 0; i < total; i++) std::printf(" %s %s\n", i == sel ? ">" : " ", names[i].c_str());
-            std::printf("\nUp/Down: choose   A: select   +: exit\n");
-            redraw = false;
-        }
         u64 d = pollDown();
         if (d & HidNpadButton_Plus) return false;
-        if (d & HidNpadButton_Up) { sel = (sel + total - 1) % total; redraw = true; }
-        if (d & HidNpadButton_Down) { sel = (sel + 1) % total; redraw = true; }
+        if (d & HidNpadButton_Up) sel = (sel + total - 1) % total;
+        if (d & HidNpadButton_Down) sel = (sel + 1) % total;
         if (d & HidNpadButton_A) {
             chosen = uids[sel];
-            name = names[sel];
+            name = names[(size_t)sel];
             return true;
         }
-        consoleUpdate(nullptr);
+        dsr::drawChoice(g_gfx, "Which user?", "Select the user whose Dark Souls save to edit.", rows, sel, "Select");
+        g_gfx.present();
     }
     return false;
 }
 
-// ---------------------------------------------------------------- editor UI
-
-enum class Mode { Edit, ConfirmSave, ConfirmQuit };
-enum class Screen { Stats, Items, Add };
-
-static inline bool isAddScreen(Screen s) { return s == Screen::Add; }
-static inline int addOffset(Screen) { return 0; }
-static bool g_showCut = false; // ZL+ZR on the Add screen reveals the unobtainable (cut) armor
-static inline int addTotal(Screen) { return (int)(g_showCut ? dsr::kAddableCount : dsr::kNormalAddableCount); }
-
-void fmtNumber(char* out, size_t n, uint32_t v) {
-    // 1234567 -> "1,234,567"
-    char raw[16];
-    std::snprintf(raw, sizeof(raw), "%u", v);
-    std::string s = raw, r;
-    int c = 0;
-    for (int i = (int)s.size() - 1; i >= 0; i--) {
-        r.insert(r.begin(), s[i]);
-        if (++c % 3 == 0 && i > 0) r.insert(r.begin(), ',');
-    }
-    std::snprintf(out, n, "%s", r.c_str());
-}
-
-void draw(const dsr::Save& save, const std::string& user, const std::string& file, Screen screen, int sel,
-          Mode mode, const std::string& message) {
-    consoleClear();
-    std::printf("Dark Souls Remastered Save Editor\n");
-    std::printf("User: %s   File: %s   Character: level %u (entry at 0x%X)\n", user.c_str(), file.c_str(), save.get(dsr::kFieldLevel), (unsigned)save.base());
-    std::printf("Status: %s%s\x1b[0m\n", save.editable() ? "\x1b[32m" : "\x1b[31m", dsr::statusText(save.status()));
-    std::printf("Screen: %s %s %s   (press - to switch)\n\n", screen == Screen::Stats ? "[Stats]" : " Stats ",
-                screen == Screen::Items ? "[Items]" : " Items ", screen == Screen::Add ? "[Add]" : " Add ");
-
-    if (screen == Screen::Stats) {
-        for (size_t i = 0; i < dsr::kFieldCount; i++) {
-            char cur[24], orig[24];
-            fmtNumber(cur, sizeof(cur), save.get(i));
-            fmtNumber(orig, sizeof(orig), save.original(i));
-            if (save.changed(i))
-                std::printf(" %s %-14s \x1b[33m%13s\x1b[0m  (was %s)\n", (int)i == sel ? ">" : " ", dsr::kFields[i].name, cur, orig);
-            else
-                std::printf(" %s %-14s %13s\n", (int)i == sel ? ">" : " ", dsr::kFields[i].name, cur);
-        }
-        std::printf("\n Level follows your stats automatically (stats total - %d).\n", save.levelOffset());
-    } else if (isAddScreen(screen)) {
-        const int total = addTotal(screen), win = 24, off = addOffset(screen);
-        if (g_showCut) std::printf(" \x1b[33mCUT ITEMS SHOWN at the end of the list - unobtainable in the real game, untested.\x1b[0m\n");
-        int first = sel - win / 2;
-        if (first > total - win) first = total - win;
-        if (first < 0) first = 0;
-        int last = first + win < total ? first + win : total;
-        std::printf(" %s (%d/%d)\n", first > 0 ? "^ more above" : "", sel + 1, total);
-        for (int i = first; i < last; i++) {
-            const dsr::AddableDef& d = dsr::kAddableItems[off + i];
-            const char* kind = d.tag == dsr::kGoodsTag ? (d.keyItem ? "KEY ITEM" : "Item") : d.tag == 0x20000000u ? "Ring" : d.tag == 0x10000000u ? "Armor" : d.maxNum > 1 ? "Ammo" : "Weapon";
-            size_t owned = save.findOwned((size_t)(off + i));
-            char status[40];
-            if (d.tag != dsr::kGoodsTag)
-                std::snprintf(status, sizeof(status), "%s", save.owns((size_t)(off + i)) ? "owned" : "not owned");
-            else if (owned >= save.itemCount())
-                std::snprintf(status, sizeof(status), "not owned");
-            else
-                std::snprintf(status, sizeof(status), "owned x%u%s", save.itemQty(owned), save.itemIsNew(owned) ? "  (new)" : "");
-            std::printf(" %s %-8s %-30s #%-5u %s\n", i == sel ? ">" : " ", kind, d.name, (unsigned)d.id, status);
-        }
-        std::printf(" %s\n", last < total ? "v more below" : "");
-        std::printf(" X adds the item (stacks to the game limit; others x1, all +0). KEY ITEMS can skip story\n"
-                    " progress (e.g. Lordvessel). Experimental: play offline, keep your backup. L/R jump 10.\n");
-    } else if (save.itemCount() == 0) {
-        std::printf(" No supported items found in this inventory.\n");
-    } else {
-        const int total = (int)save.itemCount(), win = 24;
-        int first = sel - win / 2;
-        if (first > total - win) first = total - win;
-        if (first < 0) first = 0;
-        int last = first + win < total ? first + win : total;
-        std::printf(" %s (%d/%d)\n", first > 0 ? "^ more above" : "", sel + 1, total);
-        for (int i = first; i < last; i++) {
-            size_t k = (size_t)i;
-            if (save.itemChanged(k))
-                std::printf(" %s %-32s \x1b[33m%5u\x1b[0m / %-3u (was %u)\n", i == sel ? ">" : " ", save.itemName(k), save.itemQty(k), save.itemMaxQty(k), save.itemOriginalQty(k));
-            else
-                std::printf(" %s %-32s %5u / %-3u\n", i == sel ? ">" : " ", save.itemName(k), save.itemQty(k), save.itemMaxQty(k));
-        }
-        std::printf(" %s\n", last < total ? "v more below" : "");
-        std::printf("\n Quantities are limited to each item's in-game stack size. To get items you don't own, use the Add screen.\n");
-    }
-
-    std::printf("\n");
-    if (mode == Mode::ConfirmSave) {
-        std::printf("\x1b[33mWrite changes to the Switch save?\x1b[0m  A: yes   B: cancel\n"
-                    "(a backup is written to the SD card first)\n");
-    } else if (mode == Mode::ConfirmQuit) {
-        std::printf("\x1b[33mDiscard unsaved changes and exit?\x1b[0m  A: yes   B: cancel\n");
-    } else {
-        if (screen == Screen::Stats)
-            std::printf("Up/Down: field    Left/Right: -/+1    L/R: -/+10    ZL/ZR: -/+1000\n"
-                        "X: set to max     Y: revert field     A: save   -: next   B or +: exit\n");
-        else if (screen == Screen::Items)
-            std::printf("Up/Down: item     Left/Right: -/+1    L/R: -/+10\n"
-                        "X: set to max     Y: revert item      A: save   -: next   B or +: exit\n");
-        else
-            std::printf("Up/Down: item\n"
-                        "X: add the item   Y: undo an add   A: save   -: next   B or +: exit\n");
-    }
-    if (!message.empty()) std::printf("\n%s\n", message.c_str());
-}
+// ---------------------------------------------------------------- editor
 
 // Result of one save attempt as the editor loop needs it.
 struct SaveAttempt {
     std::string message;
+    dsr::Tone tone = dsr::Tone::Info;
     bool reload = false;   // verified: the file on the console is the new baseline
     bool recovery = false; // the file may differ from what was loaded: no further saves until a restart
 };
+
+std::string baseName(const std::string& p) {
+    size_t slash = p.find_last_of('/');
+    return slash == std::string::npos ? p : p.substr(slash + 1);
+}
 
 // Backup, write, commit and verify through dsr::saveWithBackup (the logic is tested on a PC).
 SaveAttempt performSave(dsr::Save& save, const std::string& saveName, const std::string& userKey) {
@@ -362,74 +281,83 @@ SaveAttempt performSave(dsr::Save& save, const std::string& saveName, const std:
 
     SwitchFs fs;
     const std::vector<uint8_t>& out = save.finalize();
-    size_t slash = saveName.find_last_of('/');
-    std::string prefix = userKey + "_" + (slash == std::string::npos ? saveName : saveName.substr(slash + 1));
+    std::string prefix = userKey + "_" + baseName(saveName);
     dsr::SaveReport r = dsr::saveWithBackup(fs, std::string("save:/") + saveName, kBackupDir, prefix, backupStamp(),
                                             save.originalBytes(), out, (int64_t)save.base());
 
-    const std::string bak = r.backupPath.empty() ? std::string() : "\nBackup: " + r.backupPath;
+    const std::string bak = r.backupPath.empty() ? std::string() : " Backup: " + baseName(r.backupPath);
     SaveAttempt a;
+    a.tone = dsr::Tone::Bad;
     switch (r.outcome) {
         case dsr::SaveOutcome::Verified:
-            a.message = "\x1b[32mSaved and verified.\x1b[0m" + bak;
+            a.message = "Saved and verified." + bak;
+            a.tone = dsr::Tone::Good;
             a.reload = true;
             break;
         case dsr::SaveOutcome::StaleLive:
-            a.message = "\x1b[31mSave NOT written: the save file changed since it was loaded (or could not be read). Your edits are kept. Restart the editor to reload it.\x1b[0m";
+            a.message = "NOT saved: the save file changed since it was loaded. Your edits are kept. Restart the editor.";
             break;
         case dsr::SaveOutcome::BackupFailed:
-            a.message = "\x1b[31mSave NOT written: a verified SD card backup could not be made. Your edits are kept.\x1b[0m";
+            a.message = "NOT saved: a verified SD card backup could not be made. Your edits are kept.";
             break;
         case dsr::SaveOutcome::OpenFailed:
-            a.message = "\x1b[31mSave NOT written: the save file could not be opened for writing. Your edits are kept.\x1b[0m" + bak;
+            a.message = "NOT saved: the save file could not be opened for writing. Your edits are kept." + bak;
             break;
         case dsr::SaveOutcome::WriteFailed:
-            a.message = "\x1b[31mWrite failed part way. The save may be damaged. Restore the backup, then restart.\x1b[0m" + bak;
+            a.message = "Write failed part way. The save may be damaged. Restore the backup, then restart." + bak;
             a.recovery = true;
             break;
         case dsr::SaveOutcome::CommitFailed:
-            a.message = "\x1b[31mCommit failed. The changes may not have been kept. Restart and check the save.\x1b[0m" + bak;
+            a.message = "Commit failed. The changes may not have been kept. Restart and check the save." + bak;
             a.recovery = true;
             break;
         case dsr::SaveOutcome::VerifyFailed:
-            a.message = "\x1b[31mThe written file did not verify. Restore the backup, then restart.\x1b[0m" + bak;
+            a.message = "The written file did not verify. Restore the backup, then restart." + bak;
             a.recovery = true;
             break;
     }
     return a;
 }
 
+std::string trim(const std::string& s) {
+    size_t a = 0, b = s.size();
+    while (a < b && std::isspace((unsigned char)s[a])) a++;
+    while (b > a && std::isspace((unsigned char)s[b - 1])) b--;
+    return s.substr(a, b - a);
+}
+
 void editorLoop(dsr::Save& save, const std::string& user, const std::string& file, const std::string& userKey) {
+    using namespace dsr;
     bool recovery = false; // set after a save that may have changed the file; blocks further saves
     Screen screen = Screen::Stats;
-    int sels[4] = {0, 0, 0, 0}; // selection per screen
+    int sels[2] = {0, 0};  // selection on the Stats and Items screens
+    AddList add(8);
     Mode mode = Mode::Edit;
-    std::string message;
-    if (!save.editable()) message = "Editing is disabled for this file. Nothing will be written.";
-    bool redraw = true;
-    int holdFrames = 0;
+    Banner msg;
+    std::vector<std::string> summary;
+    auto say = [&](const std::string& t, Tone tone = Tone::Info) { msg.text = t; msg.tone = tone; };
+    if (!save.editable()) say("Editing is disabled for this file. Nothing will be written.", Tone::Bad);
+    Hold hUp, hDown, hLeft, hRight, hPageU, hPageD, hCatL, hCatR;
+    uint32_t addQty = 1;                 // amount the Add screen will add
+    size_t lastPick = (size_t)-1;        // the item addQty belongs to
 
-    auto sel = [&]() -> int& { return sels[screen == Screen::Stats ? 0 : screen == Screen::Items ? 1 : screen == Screen::Add ? 2 : 3]; };
-    auto listSize = [&]() -> int {
-        if (screen == Screen::Stats) return (int)dsr::kFieldCount;
-        if (screen == Screen::Items) return (int)save.itemCount();
-        return addTotal(screen);
-    };
+    auto sel = [&]() -> int& { return sels[screen == Screen::Items ? 1 : 0]; };
+    auto listSize = [&]() -> int { return screen == Screen::Stats ? (int)kFieldCount : (int)save.itemCount(); };
     auto clampItemSel = [&]() {
         int n = (int)save.itemCount();
         if (sels[1] >= n) sels[1] = n ? n - 1 : 0;
     };
     auto adjust = [&](int64_t delta) {
-        if (screen == Screen::Stats) save.adjust(sel(), delta);
-        else if (screen == Screen::Items) save.adjustItemQty(sel(), delta);
+        if (screen == Screen::Stats) save.adjust((size_t)sel(), delta);
+        else save.adjustItemQty((size_t)sel(), delta);
     };
     auto setMax = [&]() {
-        if (screen == Screen::Stats) save.setMax(sel());
-        else if (screen == Screen::Items) save.setItemMax(sel());
+        if (screen == Screen::Stats) save.setMax((size_t)sel());
+        else save.setItemMax((size_t)sel());
     };
     auto revert = [&]() {
-        if (screen == Screen::Stats) save.revert(sel());
-        else if (screen == Screen::Items) { save.revertItem(sel()); clampItemSel(); }
+        if (screen == Screen::Stats) save.revert((size_t)sel());
+        else { save.revertItem((size_t)sel()); clampItemSel(); }
     };
 
     while (appletMainLoop()) {
@@ -437,13 +365,24 @@ void editorLoop(dsr::Save& save, const std::string& user, const std::string& fil
         u64 d = padGetButtonsDown(&g_pad);
         u64 h = padGetButtons(&g_pad);
 
+        // The D-pad and the left stick both move and change values; the right stick pages and changes
+        // category. Every input is polled every frame so a released button always resets its repeat.
+        const HidAnalogStickState ls = padGetStickPos(&g_pad, 0), rs = padGetStickPos(&g_pad, 1);
+        const bool upH = (h & HidNpadButton_Up) || stickHeld(ls.y, 1), downH = (h & HidNpadButton_Down) || stickHeld(ls.y, -1);
+        const bool leftH = (h & HidNpadButton_Left) || stickHeld(ls.x, -1), rightH = (h & HidNpadButton_Right) || stickHeld(ls.x, 1);
+        const bool up = holdFire(hUp, upH), down = holdFire(hDown, downH);
+        const bool stepLeft = holdFire(hLeft, leftH), stepRight = holdFire(hRight, rightH);
+        const int mag = stepLeft ? holdMagnitude(hLeft) : holdMagnitude(hRight);
+        const bool pageUp = holdFire(hPageU, stickHeld(rs.y, 1), 24, 8, 1000, 8), pageDown = holdFire(hPageD, stickHeld(rs.y, -1), 24, 8, 1000, 8);
+        const bool catPrev = holdFire(hCatL, stickHeld(rs.x, -1), 24, 12, 1000, 12), catNext = holdFire(hCatR, stickHeld(rs.x, 1), 24, 12, 1000, 12);
+
         if (mode == Mode::ConfirmSave) {
             if (d & HidNpadButton_A) {
                 if (recovery) {
-                    message = "\x1b[31mSaving is disabled after a failed write. Restore your backup and restart the editor.\x1b[0m";
+                    say("Saving is disabled after a failed write. Restore your backup and restart the editor.", Tone::Bad);
                 } else {
                     SaveAttempt at = performSave(save, file, userKey);
-                    message = at.message;
+                    say(at.message, at.tone);
                     if (at.recovery) recovery = true;
                     // Only a verified write replaces the baseline. In every other case the user's
                     // edits stay in memory.
@@ -455,104 +394,133 @@ void editorLoop(dsr::Save& save, const std::string& user, const std::string& fil
                     }
                 }
                 mode = Mode::Edit;
-                redraw = true;
             } else if (d & HidNpadButton_B) {
                 mode = Mode::Edit;
-                message.clear();
-                redraw = true;
+                msg = Banner();
             }
         } else if (mode == Mode::ConfirmQuit) {
             if (d & HidNpadButton_A) return;
-            if (d & HidNpadButton_B) { mode = Mode::Edit; message.clear(); redraw = true; }
+            if (d & HidNpadButton_B) { mode = Mode::Edit; msg = Banner(); }
         } else {
             if (d & (HidNpadButton_B | HidNpadButton_Plus)) {
-                if (save.dirty()) { mode = Mode::ConfirmQuit; redraw = true; }
+                if (save.dirty()) mode = Mode::ConfirmQuit;
                 else return;
             }
-            if (d & HidNpadButton_Minus) {
-                screen = (screen == Screen::Stats) ? Screen::Items : (screen == Screen::Items) ? Screen::Add : Screen::Stats;
-                message.clear();
-                redraw = true;
-            }
-            int n = listSize(); // may be 0 on the Items screen
-            if (n > 0) {
-                if (d & HidNpadButton_Up) { sel() = (sel() + n - 1) % n; redraw = true; }
-                if (d & HidNpadButton_Down) { sel() = (sel() + 1) % n; redraw = true; }
+            // ZL and ZR (and -) switch between the Stats, Items and Add screens.
+            int tabStep = (d & HidNpadButton_ZR) || (d & HidNpadButton_Minus) ? 1 : (d & HidNpadButton_ZL) ? -1 : 0;
+            if (tabStep) {
+                screen = (Screen)((((int)screen + tabStep) % 3 + 3) % 3);
+                msg = Banner();
             }
 
-            if (save.editable() && isAddScreen(screen) && (d & HidNpadButton_X)) {
-                size_t idx = 0;
-                const size_t pick = (size_t)(addOffset(screen) + sel());
-                const uint32_t want = dsr::kAddableItems[pick].maxNum;
-                dsr::AddResult r = save.addItem(pick, want, &idx);
-                const char* nm = dsr::kAddableItems[pick].name;
-                bool goods = dsr::kAddableItems[pick].tag == dsr::kGoodsTag;
-                char buf[160];
-                switch (r) {
-                    case dsr::AddResult::Added:
-                        if (goods) std::snprintf(buf, sizeof(buf), "Added %s x%u. Press A to save, or Items screen to adjust.", nm, (unsigned)want);
-                        else std::snprintf(buf, sizeof(buf), "Added %s. Press A to save.", nm);
-                        break;
-                    case dsr::AddResult::SetExisting:
-                        std::snprintf(buf, sizeof(buf), "You already own %s: set it to x%u.", nm, (unsigned)want);
-                        break;
-                    case dsr::AddResult::AlreadyOwned:
-                        std::snprintf(buf, sizeof(buf), "You already own %s. Nothing changed.", nm);
-                        break;
-                    case dsr::AddResult::NoFreeSlot:
-                        std::snprintf(buf, sizeof(buf), "No suitable empty inventory slot was found. Nothing changed.");
-                        break;
-                    default:
-                        std::snprintf(buf, sizeof(buf), "Cannot add items to this save.");
-                        break;
-                }
-                message = buf;
-                redraw = true;
-            }
-            if (isAddScreen(screen) && n > 0) {
-                if (isAddScreen(screen) && (d & (HidNpadButton_ZL | HidNpadButton_ZR)) &&
-                    (padGetButtons(&g_pad) & (HidNpadButton_ZL | HidNpadButton_ZR)) == (HidNpadButton_ZL | HidNpadButton_ZR)) {
-                    g_showCut = !g_showCut;
-                    if (!g_showCut && sel() >= (int)dsr::kNormalAddableCount) sel() = (int)dsr::kNormalAddableCount - 1;
-                    message = g_showCut ? "Cut items shown at the end of the list (unobtainable in the real game)." : "Cut items hidden.";
-                    n = listSize(); // the list changed size: later buttons in this frame must use the new size
-                    redraw = true;
-                }
-                if (d & HidNpadButton_L) { sel() = sel() >= 10 ? sel() - 10 : 0; redraw = true; }
-                if (d & HidNpadButton_R) { sel() = sel() + 10 < n ? sel() + 10 : n - 1; redraw = true; }
-                if (save.editable() && (d & HidNpadButton_Y)) {
-                    message = save.revertAdded((size_t)(addOffset(screen) + sel())) ? "Removed the item you added." : "That item was not added in this session.";
-                    redraw = true;
-                }
-            }
-            if (save.editable() && !isAddScreen(screen) && n > 0) {
-                // Fine steps repeat while held (after a short delay).
-                bool left = h & HidNpadButton_Left, right = h & HidNpadButton_Right;
-                if (left || right) holdFrames++; else holdFrames = 0;
-                bool fire = (d & (HidNpadButton_Left | HidNpadButton_Right)) || (holdFrames > 20 && holdFrames % 3 == 0);
-                int step = left ? -1 : 1;
-                if (fire && (left || right)) { adjust(step); redraw = true; message.clear(); }
+            if (screen == Screen::Add) {
+                if (up) add.move(-1);
+                if (down) add.move(1);
+                if (pageUp) add.page(-1);
+                if (pageDown) add.page(1);
+                if ((d & HidNpadButton_L) || catPrev) add.stepCategory(-1);
+                if ((d & HidNpadButton_R) || catNext) add.stepCategory(1);
 
-                if (d & HidNpadButton_L) { adjust(-10); redraw = true; message.clear(); }
-                if (d & HidNpadButton_R) { adjust(10);  redraw = true; message.clear(); }
-                if (screen == Screen::Stats) { // big steps only make sense for souls/HP-sized numbers
-                    if (d & HidNpadButton_ZL) { adjust(-1000); redraw = true; message.clear(); }
-                    if (d & HidNpadButton_ZR) { adjust(1000);  redraw = true; message.clear(); }
+                // The amount to add starts at 1 for every item you land on.
+                if (add.hasSelection() && add.selected() != lastPick) { addQty = 1; lastPick = add.selected(); }
+                if (add.hasSelection() && (stepLeft || stepRight)) {
+                    const int64_t cap = kAddableItems[add.selected()].maxNum;
+                    int64_t q = (int64_t)addQty + (stepRight ? mag : -mag);
+                    addQty = (uint32_t)std::max<int64_t>(1, std::min<int64_t>(q, cap));
                 }
-                if (d & HidNpadButton_X) { setMax();  redraw = true; message.clear(); }
-                if (d & HidNpadButton_Y) { revert();  redraw = true; message.clear(); }
+
+                if (d & HidNpadButton_StickL) {
+                    std::string q;
+                    if (askText("Search items by name (leave empty to clear)", add.query(), q)) {
+                        add.setQuery(trim(q));
+                        say(add.query().empty() ? "Search cleared." : "Searching for \"" + add.query() + "\".");
+                    } else {
+                        say("Search cancelled.");
+                    }
+                }
+                if (d & HidNpadButton_StickR) {
+                    add.setShowCut(!add.showCut());
+                    say(add.showCut() ? "Cut items shown at the end of the list (unobtainable in the real game)." : "Cut items hidden.");
+                }
+                if (save.editable() && (d & HidNpadButton_X) && add.hasSelection()) {
+                    size_t idx = 0;
+                    const size_t pick = add.selected();
+                    const uint32_t want = std::max<uint32_t>(1, std::min<uint32_t>(addQty, kAddableItems[pick].maxNum));
+                    AddResult r = save.addItem(pick, want, &idx);
+                    const char* nm = kAddableItems[pick].name;
+                    bool goods = kAddableItems[pick].tag == kGoodsTag;
+                    char buf[160];
+                    Tone tone = Tone::Info;
+                    switch (r) {
+                        case AddResult::Added:
+                            if (goods) std::snprintf(buf, sizeof(buf), "Added %s x%u. Press A to save.", nm, (unsigned)want);
+                            else std::snprintf(buf, sizeof(buf), "Added %s. Press A to save.", nm);
+                            tone = Tone::Good;
+                            break;
+                        case AddResult::SetExisting:
+                            std::snprintf(buf, sizeof(buf), "You already own %s: set it to x%u.", nm, (unsigned)want);
+                            tone = Tone::Good;
+                            break;
+                        case AddResult::AlreadyOwned:
+                            std::snprintf(buf, sizeof(buf), "You already own %s. Nothing changed.", nm);
+                            break;
+                        case AddResult::NoFreeSlot:
+                            std::snprintf(buf, sizeof(buf), "No suitable empty inventory slot was found. Nothing changed.");
+                            tone = Tone::Bad;
+                            break;
+                        default:
+                            std::snprintf(buf, sizeof(buf), "Cannot add items to this save.");
+                            tone = Tone::Bad;
+                            break;
+                    }
+                    say(buf, tone);
+                }
+                if (save.editable() && (d & HidNpadButton_Y) && add.hasSelection())
+                    say(save.revertAdded(add.selected()) ? "Removed the item you added." : "That item was not added in this session.");
+            } else {
+                int n = listSize(); // may be 0 on the Items screen
+                if (n > 0) {
+                    if (up) sel() = (sel() + n - 1) % n;
+                    if (down) sel() = (sel() + 1) % n;
+                }
+                if (save.editable() && n > 0) {
+                    // Left/Right: 1 per press; holding speeds up to 10 and then 100 per step.
+                    if (stepLeft) { adjust(-mag); msg = Banner(); }
+                    if (stepRight) { adjust(mag); msg = Banner(); }
+                    if (screen == Screen::Stats) { // big steps only make sense for souls/HP-sized numbers
+                        if (d & HidNpadButton_L) { adjust(-1000); msg = Banner(); }
+                        if (d & HidNpadButton_R) { adjust(1000);  msg = Banner(); }
+                    }
+                    if (d & HidNpadButton_X) { setMax(); msg = Banner(); }
+                    if (d & HidNpadButton_Y) { revert(); msg = Banner(); }
+                }
             }
             if (save.editable() && (d & HidNpadButton_A)) {
-                if (save.dirty()) { mode = Mode::ConfirmSave; redraw = true; }
-                else { message = "No changes to save."; redraw = true; }
+                if (save.dirty()) {
+                    summary = changeSummary(save, 9);
+                    mode = Mode::ConfirmSave;
+                } else {
+                    say("No changes to save.");
+                }
             }
         }
 
-        if (redraw) {
-            draw(save, user, file, screen, sel(), mode, message);
-            redraw = false;
-        }
-        consoleUpdate(nullptr);
+        EditorView v;
+        v.save = &save;
+        v.add = &add;
+        v.user = user;
+        v.file = file;
+        v.screen = screen;
+        v.statSel = sels[0];
+        v.itemSel = sels[1];
+        v.mode = mode;
+        v.msg = msg;
+        v.addQty = addQty;
+        v.pending = countChanges(save);
+        v.recovery = recovery;
+        v.summary = summary;
+        drawEditor(g_gfx, v);
+        g_gfx.present();
     }
 }
 
@@ -560,50 +528,51 @@ void editorLoop(dsr::Save& save, const std::string& user, const std::string& fil
 // or -1 if the app is closing or the user backed out.
 int pickCharacter(const std::vector<dsr::CharacterInfo>& c) {
     int sel = 0;
-    for (size_t i = 0; i < c.size(); i++)
+    std::vector<dsr::ChoiceRow> rows;
+    for (size_t i = 0; i < c.size(); i++) {
         if (c[i].isFileDefault) sel = (int)i;
-    bool redraw = true;
+        rows.push_back({"Character " + std::to_string(i + 1),
+                        "level " + std::to_string(c[i].level) + "    souls " + dsr::withCommas(c[i].souls) + (c[i].isFileDefault ? "    (the game's slot 1)" : "")});
+    }
+    const std::string sub = "This save has " + std::to_string(c.size()) + " characters. Choose one to edit.";
     while (appletMainLoop()) {
-        if (redraw) {
-            consoleClear();
-            std::printf("Dark Souls Remastered Save Editor\n\nThis save has %u characters. Choose one to edit:\n\n", (unsigned)c.size());
-            for (size_t i = 0; i < c.size(); i++)
-                std::printf(" %s Character %u   level %-4u  souls %-10u%s\n", (int)i == sel ? ">" : " ", (unsigned)i + 1, c[i].level, c[i].souls,
-                            c[i].isFileDefault ? "  (the game's slot 1)" : "");
-            std::printf("\nUp/Down: choose   A: edit this character   +: exit\n");
-            redraw = false;
-        }
         u64 d = pollDown();
         if (d & HidNpadButton_Plus) return -1;
         if (d & HidNpadButton_A) return sel;
-        if (d & HidNpadButton_Up) { sel = (sel + (int)c.size() - 1) % (int)c.size(); redraw = true; }
-        if (d & HidNpadButton_Down) { sel = (sel + 1) % (int)c.size(); redraw = true; }
-        consoleUpdate(nullptr);
+        if (d & HidNpadButton_Up) sel = (sel + (int)c.size() - 1) % (int)c.size();
+        if (d & HidNpadButton_Down) sel = (sel + 1) % (int)c.size();
+        dsr::drawChoice(g_gfx, "Which character?", sub, rows, sel, "Edit this one");
+        g_gfx.present();
     }
     return -1;
 }
 
 bool showWarning() {
-    consoleClear();
-    std::printf("Dark Souls Remastered Save Editor\n\n"
-                "This edits your REAL save data on this console.\n\n"
-                " - A backup is written to the SD card before every write.\n"
-                " - Edited saves can be flagged online. Play OFFLINE with an edited save,\n"
-                "   and keep a backup of your untouched save.\n"
-                " - If the save holds several characters you will be asked which to edit.\n"
-                " - Close the game completely before running this.\n\n"
-                "A: continue      +: exit\n");
     u64 pressed = 0;
-    if (!waitFor(HidNpadButton_A | HidNpadButton_Plus, &pressed)) return false;
+    if (!waitFor(HidNpadButton_A | HidNpadButton_Plus, [] { dsr::drawWarning(g_gfx); }, &pressed)) return false;
     return pressed & HidNpadButton_A;
 }
 
 } // namespace
 
 int main(int, char**) {
-    consoleInit(nullptr);
     padConfigureInput(1, HidNpadStyleSet_NpadStandard);
     padInitializeDefault(&g_pad);
+
+    if (!g_gfx.init(kIconDir)) {
+        // No graphics: say why on the plain text console, so the problem can be reported.
+        std::string why = g_gfx.error();
+        g_gfx.shutdown();
+        consoleInit(nullptr);
+        std::printf("Dark Souls Remastered Save Editor\n\nCould not start graphics:\n%s\n\nPress + to exit.\n", why.c_str());
+        consoleUpdate(nullptr);
+        while (appletMainLoop()) {
+            if (pollDown() & HidNpadButton_Plus) break;
+            consoleUpdate(nullptr);
+        }
+        consoleExit(nullptr);
+        return 1;
+    }
 
     bool accountsReady = false, mounted = false;
 
@@ -678,6 +647,6 @@ int main(int, char**) {
 
     if (mounted) fsdevUnmountDevice(kMount);
     if (accountsReady) accountExit();
-    consoleExit(nullptr);
+    g_gfx.shutdown();
     return 0;
 }

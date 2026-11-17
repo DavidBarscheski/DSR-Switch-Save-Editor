@@ -183,6 +183,8 @@ void Save::indexItems() {
     }
 }
 
+uint32_t Save::itemId(size_t i) const { return i < items_.size() ? items_[i].def->id : 0; }
+
 const char* Save::itemName(size_t i) const { return i < items_.size() ? items_[i].def->name : ""; }
 
 uint32_t Save::itemQty(size_t i) const {
@@ -227,6 +229,28 @@ size_t Save::findOwned(size_t addable) const {
 
 bool Save::owns(size_t addable) const {
     return addable < kAddableCount && ownsEntry(kAddableItems[addable].tag, kAddableItems[addable].id);
+}
+
+bool Save::addedThisSession(size_t addable) const {
+    if (!owns(addable) || !invRecognised()) return false;
+    const AddableDef& d = kAddableItems[addable];
+    uint32_t cap = le32(orig_.data() + base_ + kInvCapacityOff);
+    for (uint32_t slot = 0; slot < cap; slot++) {
+        const uint8_t* e = orig_.data() + slotOffset(slot);
+        if (le32(e) == d.tag && le32(e + 4) == d.id) return false;
+    }
+    return true;
+}
+
+size_t Save::addedEntryCount() const {
+    if (!invRecognised()) return 0;
+    size_t n = 0;
+    uint32_t cap = le32(orig_.data() + base_ + kInvCapacityOff);
+    for (uint32_t slot = 0; slot < cap; slot++) {
+        size_t off = slotOffset(slot);
+        if (le32(orig_.data() + off) == 0xFFFFFFFFu && le32(cur_.data() + off) != 0xFFFFFFFFu) n++;
+    }
+    return n;
 }
 
 bool Save::revertAdded(size_t addable) {

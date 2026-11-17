@@ -1,64 +1,55 @@
-# DSR Save Editor (Nintendo Switch homebrew)
+# DSR Save Editor
 
-An on-console editor for your **Dark Souls: Remastered** save (title ID `01004AB00A260000`).
-Runs as an `.nro` from the Homebrew Menu, reads the game's save data directly, edits values,
-fixes the save checksum, and writes it back.
+A save editor for **Dark Souls: Remastered** on the Nintendo Switch. It runs as homebrew straight from your console, reads the
+game's own save data, lets you change your character and inventory in a proper on-screen interface, fixes the save's checksum
+and writes it back, with a backup first every time.
 
-## What it edits
+<!-- Add a screenshot here: ![Add screen](docs/add-screen.png) -->
 
-Souls, Level, Vitality, Attunement, Endurance, Strength, Dexterity, Resistance, Intelligence,
-Faith, HP, Max HP, Stamina, Max Stamina, for the character you pick. If a save file holds more than one character (some do), the app lists them with level and souls and asks which to edit; the first one is the game's slot 1.
+## Features
 
-The offsets and checksum scheme come from the community EdiZon config/script for this game
-(marked "beta, first slot only" upstream).
+- **Stats:** souls, level, the eight attributes, HP and stamina. Level follows your attributes automatically.
+- **Items:** change the quantity of materials, Humanity and other stacks you already own.
+- **Add:** put items into your inventory that you don't have yet: 217 goods (materials, consumables, spells, key items), 41 rings,
+  232 armor pieces and 210 weapons and shields (including ammunition). Everything is the +0 version, with the game's own stack
+  limits and durability.
+- **Browse with ease:** category tabs, search by name, Owned / Missing / Staged status, and the game's item icons if you add them.
+- **Several characters:** if the save holds more than one, you choose which to edit.
+- **Safe by design:** a verified backup before every write, with read-back checks after. See [Safety](#safety).
 
-**Items screen (press `-`):** change the quantity (1-99) of stacks you **already own** of Humanity
-and the upgrade materials (Titanite Shard, Large, Green, Chunk, Blue/White/Red Chunk, Slab,
-Blue/White/Red Slab, Dragon Scale, Demon Titanite, Twinkling Titanite). Names and IDs come from a
-community item-ID spreadsheet and were checked against a real save (103 of its 104 goods matched).
-The inventory layout was worked out from that save: a header (slot size 0x1C, 2048 slots) followed by
-a table of slots, each holding a type tag, item id and quantity. Only that quantity is changed; the
-app does not create new inventory entries, weapons, armor, or key items, and it offers no items at
-all if the inventory header doesn't look exactly as expected.
+## Installing
 
-**Add screen (press `-` twice): EXPERIMENTAL.** Creates a new inventory entry for any regular item
-you don't own: 217 goods (materials, consumables, 72 spells, 45 key items such as embers,
-Lordvessel and Master Key), 41 rings, 232 armor pieces and 210 weapons/shields including 14 kinds of
-ammunition (x999). Everything is the +0 version; upgraded or infused (+N) gear is not offered. Goods
-stack to the game's own limit, spells and the rest are x1. The list scrolls; L/R jump 10 entries, X adds,
-Y undoes an add made in this session. Anything you already own is left alone. KEY ITEMS can skip story
-progress, so only add them if you know what they do. Not offered: Estus Flask (its upgrade path changes the
-item's id), gestures and cut or unused rows (the unobtainable Elite Cleric and Mage Smith armor is hidden: press ZL+ZR together on the Add screen to show those 8 pieces at the end of the list, and again to hide them). Inventory space is limited, so a very large batch will stop
-with "no free slot".
+1. Download `DSRSaveEditor.nro` from the [Releases](../../releases) page.
+2. Copy it to `sdmc:/switch/` on your SD card.
+3. Close Dark Souls Remastered completely, then start the editor from the Homebrew Menu (title-takeover launch is fine).
 
-Every item's menu sort key, stack limit and durability now come from the game's own parameter tables
-(`GameParam`, read from a cartridge dump): the sort key stored in an entry's handle is the item's
-`sortId` (goods and rings) or `sortId x 100` (weapons and armor). This was checked against 1,700+
-entries in six real Switch saves; the only exceptions are items the game created by transforming
-another one (infusions, boss-soul weapons, Estus upgrades), which keep the SOURCE item's handle. So
-weapons made from a boss soul, such as Greatsword of Artorias, are added with the source weapon's key.
-Key items are stored in slots 0-63 with their own counter; the app keeps that counter right. Excluded: Estus
-Flask, gestures, cut/unused rows, and infused or upgraded gear. `research/param_items.csv` holds the
-decoded tables and `research/gen_addable.py` regenerates the item lists.
+## Using it
 
-What "add" writes, copied from real game behaviour: a type/ID/quantity/handle entry in an empty slot
-(the first freed slot after the first weapon/armor entry; if none is left, the slot after the last
-used one, which is what the game did when 100 weapons were taken out of the box), plus +1 on the
-header entry counter. Slots 0-63 (key items) are never touched. Materials were confirmed to work on a
-real console, and a save edited by an earlier build of this app loaded and played normally with all
-of its added items intact. Weapons, ammunition, spells, key items and the newly added consumables are the least-tested parts (no real
-save shows the game adding a key item, so those use a freed slot, else the slot after the last used one).
-Try them offline with a backup first.
+| Button | Action |
+| --- | --- |
+| ZL / ZR (or −) | Switch between Stats, Items and Add |
+| Up / Down, left stick | Move. Hold to repeat, and it speeds up |
+| Left / Right | Change the value by 1. Hold to speed up: 1, then 10, then 100 per step. On the Add screen: the amount to add |
+| L / R | Stats: −1000 / +1000. Add screen: previous / next category |
+| Right stick | Add screen: up/down scrolls a page at a time, left/right changes category |
+| Left stick click | Add screen: search by name (system keyboard) |
+| Right stick click | Add screen: show / hide the 8 cut armor pieces (see below) |
+| X | Set to maximum (Stats and Items). Add screen: add the item (stackable items: the chosen amount) |
+| Y | Revert (on the Add screen: undo an add) |
+| A | Save: shows the list of changes and asks to confirm |
+| B or + | Exit (asks if there are unsaved changes) |
 
-Notes:
-- **Level follows your stats automatically.** Level = (sum of the eight stats) - 82, which holds for
-  every class in the game; the offset is read from your own save. Changing a stat updates Level, and
-  reverting the stat restores it. You can still set Level by hand afterwards; the next stat change
-  recomputes it.
-- Value limits (e.g. stats 1–99, level 1–802, HP up to 9999) are conservative guards chosen for this
-  app, not limits copied from the game files.
+On the Add screen, an item you already own says so, and equipment you own cannot be added twice. Stackable items start at an amount of 1.
+Key items can skip story progress, so only add them if you know what they do. The unobtainable Elite Cleric and Mage Smith armor
+is hidden by default: click the right stick on the Add screen to show those 8 pieces at the end of the list, and again to hide them.
 
-## Safety design
+### Item icons (optional)
+
+The lists show the game's own item icons if they are in `sdmc:/switch/DSRSaveEditor/icons/` (files named like `40000000_106.png`).
+Without them you get a plain box instead. The icons are the game's artwork, so they are not part of this project: you extract them
+from your own copy of the game with the scripts in `tools/` (see the notes at the top of `tools/export_icons.py`).
+
+## Safety
 
 - **Checksum gate.** On load the app recomputes the save's MD5 and compares it to the stored one.
   If they differ (different game version, unknown layout), the file is shown **read-only** and nothing
@@ -78,58 +69,65 @@ Notes:
 - **Offline only.** Play with an edited save offline. Edited saves can get flagged online, and the
   risk is yours. Keep a backup of your clean save.
 
-## Building
+## What is and isn't covered
+
+- Tested on a real Switch: stats, items, adding goods, rings, armor, weapons, ammunition and spells, the backup and save checks, and the screens.
+- **Experimental:** key items and the hidden cut armor. The app labels them as such.
+- Not offered: Estus Flask (upgrading it changes its item ID), gestures, unused entries, and upgraded or infused (+N) gear.
+- Only items in the character's inventory are shown. The bottomless box is not read or changed.
+- Value limits (for example stats 1-99 and HP up to 9999) are conservative guards chosen for this app, not limits taken from the game files.
+
+For exactly what is written and why, see [docs/HOW_IT_WORKS.md](docs/HOW_IT_WORKS.md).
+
+## Building from source
 
 1. Install [devkitPro](https://devkitpro.org/wiki/Getting_Started) with the `switch-dev` group.
-2. `export DEVKITPRO=/opt/devkitpro` (path depends on your install), then run `make`.
-3. Copy `DSRSaveEditor.nro` to `sdmc:/switch/` on your SD card and launch it from the Homebrew Menu.
+2. Install the graphics libraries: `sudo dkp-pacman -S switch-sdl2 switch-sdl2_ttf switch-sdl2_image switch-pkg-config`
+   (on Windows use the MSYS2 shell that devkitPro installs, run `pacman -S ...` and drop `sudo`).
+3. Set `DEVKITPRO` (for example `export DEVKITPRO=/opt/devkitpro`) and run `make`.
+4. Copy `DSRSaveEditor.nro` to `sdmc:/switch/`.
 
-If the Makefile misbehaves on your devkitPro version, copy the template at
-`$DEVKITPRO/examples/switch/templates/application/Makefile` and keep only the `TARGET`, `SOURCES`,
-`INCLUDES` and `APP_*` settings from this one.
-
-## Using it
-
-Close the game completely first, then launch the app (a normal Homebrew Menu launch is fine).
-
-| Button | Action |
-| --- | --- |
-| Up / Down | Choose field |
-| Left / Right | −1 / +1 (hold to repeat) |
-| L / R | −10 / +10 |
-| ZL / ZR | −1000 / +1000 (stats screen only) |
-| X | Set to maximum (99 on the items screen); on the Add screen: add x99 |
-| Y | Revert (on the Add screen: undo an add) |
-| − | Cycle Stats → Items → Add |
-| A | Save (asks to confirm) |
-| B or + | Exit (asks if there are unsaved changes) |
+If the link step reports missing SDL or freetype symbols, run
+`$DEVKITPRO/portlibs/switch/bin/aarch64-none-elf-pkg-config --libs --static sdl2 SDL2_ttf SDL2_image`
+and paste its output into `SDL_LIBS` in the Makefile.
 
 ## Tests
 
-The save/checksum logic has no Switch dependencies and is tested on a PC:
+The save logic, the backup transaction, the Add list and the screen layout have no console dependencies and are tested on a PC:
 
 ```
 make -C tests
 ```
 
-This covers MD5 known-answer vectors, edit → re-checksum → reload round trips, value clamping,
-tamper detection, malformed headers, and inventory edits (including look-alike entries that must be
-left alone). These use synthetic saves. The stats and Titanite Chunk edits were also run on a copy of
-one real save, where only the edited quantity and the 16-byte checksum changed.
+This covers MD5 test vectors, edit and re-checksum round trips, tamper detection, malformed headers, fault injection in the save
+transaction (failed backups, partial writes, stale files), hold-to-repeat timing, and the layout of every screen (nothing leaves the
+1280x720 screen or overlaps other text, with the longest item names). `DSR_DUMP=<dir> make -C tests` writes the draw commands and
+`python3 tools/render_dump.py <dir> <out>` turns them into PNGs. The Switch layer itself (`source/main.cpp`, `source/gfx_sdl.cpp`)
+can only be checked on hardware.
 
-**Not covered:** the Switch UI/filesystem layer (`source/main.cpp`) has not been compiled or run on
-hardware. Run it first against a copy-safe setup and check the SD backup appears before trusting it
-with a save you care about.
-
-## Layout
+## Project layout
 
 ```
-include/  md5.h, save.h
-source/   main.cpp (UI + FS), save.cpp (format + edits), md5.cpp
-tests/    host unit tests
+include/   headers (save format, backup transaction, Add list, drawing interface, screens, input)
+source/    main.cpp (flow, input, files), gfx_sdl.cpp (SDL drawing), ui.cpp (screens), catalog.cpp (Add list),
+           save.cpp (format and edits), persist.cpp (backup and write), md5.cpp, generated item tables (*.inc)
+tests/     host unit tests
+docs/      how the editor works
+research/  how the save format and item tables were worked out (scripts, CSVs, notes)
+tools/     scripts to extract item icons from your own game dump, and to render the screens on a PC
 ```
 
 ## Credits
 
 Save layout and offsets: Jojo's Dark Souls Remastered config/script in
-[EdiZon_CheatsConfigsAndScripts](https://github.com/WerWolv/EdiZon_CheatsConfigsAndScripts).
+[EdiZon_CheatsConfigsAndScripts](https://github.com/WerWolv/EdiZon_CheatsConfigsAndScripts). Built with
+[devkitPro](https://devkitpro.org/), libnx and SDL2. Made by D-Barsh and Claude.
+
+## Disclaimer
+
+This is a fan-made tool and is not affiliated with or endorsed by FromSoftware, Bandai Namco or Nintendo. Dark Souls is a trademark of
+its owners. The game's artwork is not included: the optional item icons are extracted by you from your own copy of the game.
+**Use at your own risk.** Editing saves can corrupt them or get an account flagged online, so play offline with an edited save and keep a
+backup of your clean save. The authors are not responsible for lost or damaged saves or for any action taken against an account.
+
+Released under the MIT License (see `LICENSE`).
