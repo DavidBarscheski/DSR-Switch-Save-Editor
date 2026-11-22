@@ -4,7 +4,7 @@ A save editor for **Dark Souls: Remastered** on the Nintendo Switch. It runs as 
 game's own save data, lets you change your character and inventory in a proper on-screen interface, fixes the save's checksum
 and writes it back, with a backup first every time.
 
-<!-- Add a screenshot here: ![Add screen](docs/add-screen.png) -->
+![Add screen](docs/add-screen.png)
 
 ## Features
 
